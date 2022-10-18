@@ -29,7 +29,7 @@ def train_model(optimizer,
         filename = 'VRP_{}_{}'.format(graph_size, strftime("%Y-%m-%d", gmtime()))
 
     def rein_loss(model, inputs, baseline, num_batch):
-        """Calculate loss for REINFORCE algorithm
+        """Calculate loss for REINFORCE algorithm with baseline
         """
 
         # Evaluate model, get costs and log probabilities

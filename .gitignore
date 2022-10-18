@@ -1,0 +1,7 @@
+# Data files
+
+# Saved checkpoints not from paper
+*_2022-*.*
+
+# Ignore Python binaries
+*.pyc

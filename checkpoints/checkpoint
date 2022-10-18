@@ -1,0 +1,2 @@
+model_checkpoint_path: "AM-D_oct_17_20_nodes.ckp"
+all_model_checkpoint_paths: "AM-D_oct_17_20_nodes.ckp"
