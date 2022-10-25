@@ -1,0 +1,10 @@
+# Data files
+
+# Saved checkpoints not from paper
+*_2022-*.*
+*.ckp*
+
+!./checkpoints/AM-D_example.*
+
+# Ignore Python binaries
+*.pyc
