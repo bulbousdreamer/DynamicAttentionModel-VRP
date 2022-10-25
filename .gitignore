@@ -2,9 +2,9 @@
 
 # Saved checkpoints not from paper
 *_2022-*.*
-*.ckp.data*
-checkpoints
-!AM-D_example*
+*.ckp*
+
+!./checkpoints/AM-D_example.*
 
 # Ignore Python binaries
 *.pyc
