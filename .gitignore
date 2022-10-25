@@ -2,6 +2,8 @@
 
 # Saved checkpoints not from paper
 *_2022-*.*
+*.ckp.data*
+checkpoints
 
 # Ignore Python binaries
 *.pyc
