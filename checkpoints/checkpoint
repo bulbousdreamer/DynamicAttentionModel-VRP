@@ -1,0 +1,2 @@
+model_checkpoint_path: "AM-D_oct_19_20_nodes_50_iter_52000_batches_32_batch_size.ckp"
+all_model_checkpoint_paths: "AM-D_oct_19_20_nodes_50_iter_52000_batches_32_batch_size.ckp"
