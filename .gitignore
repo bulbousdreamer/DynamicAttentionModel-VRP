@@ -4,6 +4,7 @@
 *_2022-*.*
 *.ckp.data*
 checkpoints
+!AM-D_example*
 
 # Ignore Python binaries
 *.pyc
