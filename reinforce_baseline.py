@@ -6,22 +6,20 @@ import numpy as np
 from attention_dynamic_model import AttentionDynamicModel
 from attention_dynamic_model import set_decode_type
 from utils import generate_data_onfly
-
+import scipy
 
 def copy_of_tf_model(model, embedding_dim=128, graph_size=20):
     """Copy model weights to new model
     """
+    # first 2 is batch size
+    graphs = tf.random.uniform(minval=0, maxval=1, shape=(2, graph_size+2, 2))
+    #start = tf.random.uniform(minval=0, maxval=1, shape=(2, 2))
+    #end = tf.random.uniform(minval=0, maxval=1, shape=(2, 2))
     # https://stackoverflow.com/questions/56841736/how-to-copy-a-network-in-tensorflow-2-0
-    CAPACITIES = {10: 20.,
-                  20: 30.,
-                  50: 40.,
-                  100: 50.
-                  }
-
-    data_random = [tf.random.uniform((2, 2,), minval=0, maxval=1, dtype=tf.dtypes.float32),
-                   tf.random.uniform((2, graph_size, 2), minval=0, maxval=1, dtype=tf.dtypes.float32),
-                   tf.cast(tf.random.uniform(minval=1, maxval=10, shape=(2, graph_size),
-                                             dtype=tf.int32), tf.float32) / tf.cast(CAPACITIES[graph_size], tf.float32)]
+    data_random = [#start,
+            #end,
+            graphs,
+            tf.convert_to_tensor([scipy.spatial.distance.cdist(g, g, "euclidean") for g in graphs])]
 
     new_model = AttentionDynamicModel(embedding_dim)
     set_decode_type(new_model, "sampling")
@@ -120,7 +118,7 @@ class RolloutBaseline:
 
         # We generate a new dataset for baseline model on each baseline update to prevent possible overfitting
         self.dataset = generate_data_onfly(num_samples=self.num_samples, graph_size=self.graph_size)
-
+        # self.dataset = make_our_dataset(num_samples=self.num_samples, graph_size=self.graph_size)
         print(f"Evaluating baseline model on baseline dataset (epoch = {epoch})")
         self.bl_vals = rollout(self.model, self.dataset)
         self.mean = tf.reduce_mean(self.bl_vals)
