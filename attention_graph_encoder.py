@@ -69,7 +69,10 @@ class GraphAttentionEncoder(tf.keras.layers.Layer):
         self.feed_forward_hidden = feed_forward_hidden
 
         # initial embeddings (batch_size, n_nodes-1, 2) --> (batch-size, input_dim), separate for depot and other nodes
-        self.init_embed_depot = tf.keras.layers.Dense(self.input_dim, name='init_embed_depot')  # nn.Linear(2, embedding_dim)
+        #self.init_embed_depot = tf.keras.layers.Dense(self.input_dim, name='init_embed_depot')  # nn.Linear(2, embedding_dim)
+
+        #self.init_embed_start = tf.keras.layers.Dense(self.input_dim, name='init_embed_start')
+        self.init_embed_end = tf.keras.layers.Dense(self.input_dim, name='init_embed_end')
         self.init_embed = tf.keras.layers.Dense(self.input_dim, name='init_embed')
 
         self.mha_layers = [MultiHeadAttentionLayer(self.input_dim, self.num_heads, self.feed_forward_hidden)
@@ -77,10 +80,15 @@ class GraphAttentionEncoder(tf.keras.layers.Layer):
 
     def call(self, x, mask=None, cur_num_nodes=None):
 
-        x = tf.concat((self.init_embed_depot(x[0])[:, None, :],  # (batch_size, 2) --> (batch_size, 1, 2)
-                       self.init_embed(tf.concat((x[1], x[2][:, :, None]), axis=-1))  # (batch_size, n_nodes-1, 2) + (batch_size, n_nodes-1)
-                       ), axis=1)  # (batch_size, n_nodes, input_dim)
+        #x = tf.concat((self.init_embed_start(x[0])[:, None, :],
+        #              self.init_embed_end(x[1])[:, None, :],
+        #              self.init_embed(tf.concat((x[2], x[3]), axis=-1))
+        #              ), axis = 1)
 
+        x = tf.concat(( # self.init_embed_start(x[2][:, 0, :])[:, None, :],
+                      self.init_embed_end(tf.concat((x[0][:, 0, :][:, None, :], x[1][:, 0, :][:, None, :]), axis=-1)),
+                      self.init_embed(tf.concat((x[0][:, 1:, :], x[1][:, 1:, :]), axis=-1))
+                      ), axis = 1)
         # stack attention layers
         for i in range(self.num_layers):
             x = self.mha_layers[i](x, mask)
