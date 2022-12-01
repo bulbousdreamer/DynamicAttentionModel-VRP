@@ -105,9 +105,9 @@ class AttentionDynamicModel(tf.keras.Model):
         cur_embedded_node = tf.gather(embeddings, tf.cast(prev_node, tf.int32), batch_dims=1)  # (batch_size, 1, input_dim)
 
         # add remaining capacity
-        step_context = tf.concat([cur_embedded_node, self.problem.VEHICLE_CAPACITY - state.used_capacity[:, :, None]], axis=-1)
+        #step_context = tf.concat([cur_embedded_node, self.problem.VEHICLE_CAPACITY - state.used_capacity[:, :, None]], axis=-1)
 
-        return step_context  # (batch_size, 1, input_dim + 1)
+        return cur_embedded_node  # (batch_size, 1, input_dim + 1)
 
     def decoder_mha(self, Q, K, V, mask=None):
         """ Computes Multi-Head Attention part of decoder
@@ -197,8 +197,6 @@ class AttentionDynamicModel(tf.keras.Model):
 
         # Get log_p corresponding to selected actions
         log_p = tf.gather_nd(_log_p, tf.cast(tf.expand_dims(a, axis=-1), tf.int32), batch_dims=2)
-
-        # Calculate log_likelihood
         return tf.reduce_sum(log_p,1)
 
     def get_projections(self, embeddings, context_vectors):
@@ -221,8 +219,8 @@ class AttentionDynamicModel(tf.keras.Model):
 
         self.batch_size = tf.shape(embeddings)[0]
 
-        outputs = []
-        sequences = []
+        outputs = [tf.zeros(shape=(inputs[1].shape[0], inputs[1].shape[-1]), dtype=tf.float32)]
+        sequences = [tf.ones(shape=(inputs[0].shape[0],), dtype=tf.int64)]  # start at zero
 
         state = self.problem(inputs)
 
@@ -232,7 +230,7 @@ class AttentionDynamicModel(tf.keras.Model):
         i = 0
         inner_i = 0
 
-        while not state.all_finished():
+        while not state.all_finished():  # limiting number of visited nodes
 
             if i > 0:
                 state.i = tf.zeros(1, dtype=tf.int64)
@@ -241,7 +239,7 @@ class AttentionDynamicModel(tf.keras.Model):
                 K_tanh, Q_context, K, V = self.get_projections(embeddings, context_vectors)
 
             inner_i = 0
-            while not state.partial_finished():
+            while not state.partial_finished():   # hyper-parameter for number of visited nodes
 
                 step_context = self.get_step_context(state, embeddings)  # (batch_size, 1), (batch_size, 1, input_dim + 1)
                 Q_step_context = self.wq_step_context(step_context)  # (batch_size, 1, output_dim)
