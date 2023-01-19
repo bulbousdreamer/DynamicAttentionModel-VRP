@@ -5,7 +5,9 @@
 *.ckp*
 *.h5
 .spyproject/
-.ipynb_checkpoints/*
+.ipynb_checkpoints/
+*.pkl
+TopologicalAttentionModel/vanilla-AMD-parameters.txt
 
 !./checkpoints/AM-D_example.*
 

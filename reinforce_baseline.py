@@ -8,7 +8,13 @@ from attention_dynamic_model import set_decode_type
 from utils import generate_data_onfly
 
 
-def copy_of_tf_model(model, embedding_dim=128, graph_size=20):
+def copy_of_tf_model(
+        model, 
+        embedding_dim=128, 
+        graph_size=20, 
+        n_encode_layers=2, 
+        n_heads=8, 
+        tanh_clipping=10):
     """Copy model weights to new model
     """
     # https://stackoverflow.com/questions/56841736/how-to-copy-a-network-in-tensorflow-2-0
@@ -23,7 +29,12 @@ def copy_of_tf_model(model, embedding_dim=128, graph_size=20):
                    tf.cast(tf.random.uniform(minval=1, maxval=10, shape=(2, graph_size),
                                              dtype=tf.int32), tf.float32) / tf.cast(CAPACITIES[graph_size], tf.float32)]
 
-    new_model = AttentionDynamicModel(embedding_dim)
+    new_model = AttentionDynamicModel(
+        embedding_dim=embedding_dim,
+        n_encode_layers=n_encode_layers,
+        n_heads=n_heads,
+        tanh_clipping=tanh_clipping
+        )
     set_decode_type(new_model, "sampling")
     _, _ = new_model(data_random)
 
@@ -64,7 +75,10 @@ class RolloutBaseline:
                  num_samples=10000,
                  warmup_exp_beta=0.8,
                  embedding_dim=128,
-                 graph_size=20
+                 graph_size=20,
+                 n_encode_layers=2,
+                 n_heads=8,
+                 tanh_clipping=10,
                  ):
         """
         Args:
@@ -97,6 +111,11 @@ class RolloutBaseline:
         # Problem params
         self.embedding_dim = embedding_dim
         self.graph_size = graph_size
+        
+        # Empty model creation for copying
+        self.n_encode_layers = n_encode_layers
+        self.n_heads = n_heads
+        self.tanh_clipping = tanh_clipping
 
         # create and evaluate initial baseline
         self._update_baseline(model, epoch)
@@ -113,10 +132,13 @@ class RolloutBaseline:
         else:
             self.model = copy_of_tf_model(model,
                                           embedding_dim=self.embedding_dim,
-                                          graph_size=self.graph_size)
+                                          graph_size=self.graph_size,
+                                          n_encode_layers=self.n_encode_layers,
+                                          n_heads=self.n_heads,
+                                          tanh_clipping=self.tanh_clipping)
 
-            # For checkpoint
-            self.model.save_weights('baseline_checkpoint_epoch_{}_{}.h5'.format(epoch, self.filename), save_format='h5')
+            # For checkpoint, currently not saving
+            # self.model.save_weights('baseline_checkpoint_epoch_{}_{}.h5'.format(epoch, self.filename), save_format='h5')
 
         # We generate a new dataset for baseline model on each baseline update to prevent possible overfitting
         self.dataset = generate_data_onfly(num_samples=self.num_samples, graph_size=self.graph_size)
@@ -178,7 +200,7 @@ class RolloutBaseline:
         candidate_vals = rollout(model, self.dataset)  # costs for training model on baseline dataset
         candidate_mean = tf.reduce_mean(candidate_vals)
 
-        diff = candidate_mean - self.mean
+        diff = candidate_mean - self.mean # mean comes from last time the baseline was updated.
 
         print(f"Epoch {self.cur_epoch} candidate mean {candidate_mean}, baseline epoch {self.cur_epoch} mean {self.mean}, difference {diff}")
 
