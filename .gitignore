@@ -5,7 +5,7 @@
 *.ckp*
 *.h5
 .spyproject/
-.ipynb_checkpoints
+.ipynb_checkpoints/*
 
 !./checkpoints/AM-D_example.*
 
