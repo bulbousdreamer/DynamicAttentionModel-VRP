@@ -3,6 +3,9 @@
 # Saved checkpoints not from paper
 *_2022-*.*
 *.ckp*
+*.h5
+.spyproject/
+.ipynb_checkpoints
 
 !./checkpoints/AM-D_example.*
 
