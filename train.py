@@ -1,3 +1,5 @@
+from typing import Tuple, List
+
 from tqdm import tqdm
 import pandas as pd
 import tensorflow as tf
@@ -7,6 +9,138 @@ from reinforce_baseline import validate
 
 from utils import generate_data_onfly, get_results, get_cur_time
 from time import gmtime, strftime
+
+
+
+def train_epoch(
+        optimizer,
+        model_tf,
+        baseline,
+        train_dataset,
+        validation_dataset,
+        cli,
+        meta_epoch=0,
+        batch = 128,
+        val_batch_size = 1000,
+        grad_norm_clipping = 1.0,
+        batch_verbose = 1000,
+        ) -> Tuple[int, int]:
+    
+    def rein_loss(model, inputs, baseline, num_batch):
+        """Calculate loss for REINFORCE algorithm with baseline
+        """
+
+        # Evaluate model, get costs and log probabilities
+        cost, log_likelihood = model(inputs)
+
+        # Evaluate baseline
+        # For first wp_n_epochs we take the combination of baseline and ema for previous batches
+        # after that we take a slice of precomputed baseline values
+        bl_val = bl_vals[num_batch] if bl_vals is not None else baseline.eval(inputs, cost)
+        # Important because we are not trying to make changes to the baseline!
+        # In a way: "Treat the baseline as if it were a constant value."
+        bl_val = tf.stop_gradient(bl_val)
+
+        # Calculate loss according to REINFORCE with Baseline.
+        # Do remember that the baseline is like a comparison value used in knowing
+        # whether the model is doing comparativelly better or worse.
+        reinforce_loss = tf.reduce_mean((cost - bl_val) * log_likelihood)
+
+        return reinforce_loss, tf.reduce_mean(cost)
+
+    def grad(model, inputs, baseline, num_batch):
+        """Forepropagate and calculate gradients
+        """
+        with tf.GradientTape() as tape:
+            loss, cost = rein_loss(model, inputs, baseline, num_batch)
+        # Note that trainable_variables is empty until the model is called on
+        # data. This is when the build method is called.
+        return loss, cost, tape.gradient(loss, model.trainable_variables)
+    
+    # For plotting
+    #train_loss_results = []
+    #train_cost_results = []
+    #val_cost_avg = []
+
+    # Training loop
+    #for epoch in range(epochs):
+
+    # Create dataset on current epoch
+    # Note that the data returned by the library are actually tensor slices
+    data = train_dataset #generate_data_onfly(num_samples=samples, graph_size=graph_size)
+    epoch_loss_avg = tf.keras.metrics.Mean()
+    epoch_cost_avg = tf.keras.metrics.Mean()
+
+    # Skip warm-up stage when we continue training from checkpoint
+    #if from_checkpoint and baseline.alpha != 1.0:
+    #    print('Skipping warm-up mode')
+    #    baseline.alpha = 1.0
+
+    # If epoch > wp_n_epochs then precompute baseline values for the whole dataset else None
+    # Collect baseline performance to be compared in a bit.
+    bl_vals = baseline.eval_all(data)  # (samples, ) or None
+    if cli.verbose >= 2:
+        print("(2v): Baseline has been evaluaded on training data.")
+    # The reshaping here will result in a new tensor where n_batches is number of batches
+    # and batch is simply the length of a single batch. This is important since
+    # Doing this reshaping will result in a tensor that has the same shape
+    # after running the for loop bellow. It is in this way that we can then
+    # compare the results obtained and make a decision whether to update the baseline.
+    bl_vals = tf.reshape(bl_vals, (-1, batch)) if bl_vals is not None else None # (n_batches, batch) or None
+    if cli.verbose >= 1:
+        print("Current decode type: {}".format(model_tf.decode_type))
+
+    # Starts the training. Total number of iterations are: samples / batch
+    for num_batch, x_batch in tqdm(enumerate(data.batch(batch)), desc="batch calculation"):
+
+        # Do forepropagation and obtain gradients.
+        loss_value, cost_val, grads = grad(model_tf, x_batch, baseline, num_batch)
+        if cli.verbose >= 3:
+            print(f"(3v): Gradient of epoch {num_batch} has been calculated.")
+        # Clip gradients by grad_norm_clipping
+        init_global_norm = tf.linalg.global_norm(grads)
+        grads, _ = tf.clip_by_global_norm(grads, grad_norm_clipping)
+        global_norm = tf.linalg.global_norm(grads)
+
+        if num_batch%batch_verbose == 0:
+            print("grad_global_norm = {}, clipped_norm = {}".format(init_global_norm.numpy(), global_norm.numpy()))
+
+        optimizer.apply_gradients(zip(grads, model_tf.trainable_variables))
+
+        # Track progress
+        epoch_loss_avg.update_state(loss_value)
+        epoch_cost_avg.update_state(cost_val)
+
+        if cli.verbose >= 1:
+            print("(1v): (batch = {}): Loss: {}: Cost: {}".format(num_batch, epoch_loss_avg.result(), epoch_cost_avg.result()))
+
+    # Update baseline if the candidate model is good enough. In this case also create new baseline dataset
+    baseline.epoch_callback(model_tf, meta_epoch)
+    set_decode_type(model_tf, "sampling")
+
+    # Save model weights
+    # model_tf.save_weights('model_checkpoint_epoch_{}_{}.h5'.format(epoch, filename), save_format='h5')
+
+    # Validate current model
+    val_cost = validate(validation_dataset, model_tf, val_batch_size)
+    #val_cost_avg.append(val_cost)
+
+    #train_loss_results.append(epoch_loss_avg.result())
+    #train_cost_results.append(epoch_cost_avg.result())
+    train_cost = epoch_cost_avg.result().numpy()
+
+    # pd.DataFrame(data={'epochs': list(range(start_epoch, epoch+1)),
+    #                   'train_loss': [x.numpy() for x in train_loss_results],
+    #                   'train_cost': [x.numpy() for x in train_cost_results],
+    #                   'val_cost': [x.numpy() for x in val_cost_avg]
+    #                   }).to_csv('backup_results_' + filename + '.csv', index=False)
+
+    print(get_cur_time(), "Epoch {}: Loss: {}: Cost: {}".format(meta_epoch, epoch_loss_avg.result(), epoch_cost_avg.result()))
+    
+    return train_cost, val_cost
+
+
+    
 
 
 def train_model(optimizer,
@@ -39,18 +173,24 @@ def train_model(optimizer,
         # For first wp_n_epochs we take the combination of baseline and ema for previous batches
         # after that we take a slice of precomputed baseline values
         bl_val = bl_vals[num_batch] if bl_vals is not None else baseline.eval(inputs, cost)
+        # Important because we are not trying to make changes to the baseline!
+        # In a way: "Treat the baseline as if it were a constant value."
         bl_val = tf.stop_gradient(bl_val)
 
-        # Calculate loss
+        # Calculate loss according to REINFORCE with Baseline.
+        # Do remember that the baseline is like a comparison value used in knowing
+        # whether the model is doing comparativelly better or worse.
         reinforce_loss = tf.reduce_mean((cost - bl_val) * log_likelihood)
 
         return reinforce_loss, tf.reduce_mean(cost)
 
     def grad(model, inputs, baseline, num_batch):
-        """Calculate gradients
+        """Forepropagate and calculate gradients
         """
         with tf.GradientTape() as tape:
             loss, cost = rein_loss(model, inputs, baseline, num_batch)
+        # Note that trainable_variables is empty until the model is called on
+        # data. This is when the build method is called.
         return loss, cost, tape.gradient(loss, model.trainable_variables)
 
     # For plotting
@@ -74,13 +214,19 @@ def train_model(optimizer,
 
         # If epoch > wp_n_epochs then precompute baseline values for the whole dataset else None
         bl_vals = baseline.eval_all(data)  # (samples, ) or None
+        # The reshaping here will result in a new tensor where n_batches is number of batches
+        # and batch is simply the length of a single batch. This is important since
+        # Doing this reshaping will result in a tensor that has the same shape
+        # after running the for loop bellow. It is in this way that we can then
+        # compare the results obtained and make a decision whether to update the baseline.
         bl_vals = tf.reshape(bl_vals, (-1, batch)) if bl_vals is not None else None # (n_batches, batch) or None
 
         print("Current decode type: {}".format(model_tf.decode_type))
 
+        # Starts the training. Total number of iterations are: samples / batch
         for num_batch, x_batch in tqdm(enumerate(data.batch(batch)), desc="batch calculation at epoch {}".format(epoch)):
 
-            # Optimize the model
+            # Do forepropagation and obtain gradients.
             loss_value, cost_val, grads = grad(model_tf, x_batch, baseline, num_batch)
 
             # Clip gradients by grad_norm_clipping

@@ -196,6 +196,7 @@ class AttentionDynamicModel(tf.keras.Model):
     def get_log_likelihood(self, _log_p, a):
 
         # Get log_p corresponding to selected actions
+        #import pdb; pdb.set_trace()
         log_p = tf.gather_nd(_log_p, tf.cast(tf.expand_dims(a, axis=-1), tf.int32), batch_dims=2)
 
         # Calculate log_likelihood
@@ -223,6 +224,8 @@ class AttentionDynamicModel(tf.keras.Model):
 
         outputs = []
         sequences = []
+        
+
 
         state = self.problem(inputs)
 
@@ -244,6 +247,7 @@ class AttentionDynamicModel(tf.keras.Model):
             while not state.partial_finished():
 
                 step_context = self.get_step_context(state, embeddings)  # (batch_size, 1), (batch_size, 1, input_dim + 1)
+
                 Q_step_context = self.wq_step_context(step_context)  # (batch_size, 1, output_dim)
                 Q = Q_context + Q_step_context
 
