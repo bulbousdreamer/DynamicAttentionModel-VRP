@@ -16,7 +16,7 @@ sns.set_theme()
 
 
 def main_viz():
-    data_file = './_experiment_Jan-18-2023_12-47-57_nodes_20.pkl'
+    data_file = './_experiment_Jan-19-2023_14-45-58_nodes_10.pkl'
     
     with open(data_file, 'rb') as jar:
         data = pickle.load(jar)
@@ -24,21 +24,24 @@ def main_viz():
     performance = {
         'Performance': data['performance'],
     }
+    #sns.set(rc={"figure.figsize":(10, 3)})
+    plt.figure()
     #performance_pd = pd.DataFrame(performance)
     sns.lineplot(data=performance).set(\
                                        title=f'Performance Per Epoch on {data["cli"].nodes}-node Graphs', 
                                        xticks=range(len(data['performance'])),
                                        xlabel='Epochs',
                                        ylabel='Cost')
-    plt.show()
+    plt.xticks(rotation=65)
     data_per_epoch = 2560
+
+    plt.figure()
     sns.lineplot(data=performance).set(\
                                        title=f'Performance Per Epoch on {data["cli"].nodes}-node Graphs',
                                        xticks=range(len(data['performance'])),
                                        xticklabels=[i*data_per_epoch for i in range(len(data['performance']))],
                                        xlabel='Training Data',
                                        ylabel='Cost')
-    plt.show()
     #training_time = data['training_time']
     #import pdb; pdb.set_trace()
 
